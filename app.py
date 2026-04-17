@@ -46,25 +46,40 @@ html, body, [class*="css"] { font-family: 'DM Sans', sans-serif; }
 """, unsafe_allow_html=True)
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-LSTM_PATH = os.path.join(BASE_DIR, "mobilenet_lstm_abnormal.keras")
+WEIGHTS_PATH = os.path.join(BASE_DIR, "mobilenet_lstm_weights.weights.h5")
+SEQ_LENGTH = 16
 
-@st.cache_resource(show_spinner="🔄 Loading model...")
-def load_models(lstm_path):
+@st.cache_resource(show_spinner="🔄 Loading models...")
+def load_models(weights_path):
     import tensorflow as tf
-    from tensorflow.keras.models import load_model
     from tensorflow.keras import Model, Input
+    from tensorflow.keras.layers import LSTM, Dense, Dropout, BatchNormalization
     from tensorflow.keras.applications import MobileNetV2
     from tensorflow.keras.applications.mobilenet_v2 import preprocess_input
     from tensorflow.keras.layers import GlobalAveragePooling2D
-    lstm = load_model(lstm_path)
+    
     base = MobileNetV2(input_shape=(224, 224, 3), include_top=False, weights='imagenet')
     base.trainable = False
     inp = Input(shape=(224, 224, 3))
     x = preprocess_input(inp)
     x = base(x, training=False)
     x = GlobalAveragePooling2D()(x)
-    mob = Model(inp, x, name='MobileNetV2_Extractor')
-    return lstm, mob
+    mobilenet = Model(inp, x, name='MobileNetV2_Extractor')
+    
+    inputs = Input(shape=(SEQ_LENGTH, 1280))
+    x = LSTM(256, return_sequences=True, dropout=0.3, recurrent_dropout=0.2)(inputs)
+    x = Dropout(0.4)(x)
+    x = LSTM(128, return_sequences=False, dropout=0.2, recurrent_dropout=0.2)(x)
+    x = Dropout(0.3)(x)
+    x = Dense(64, activation='relu')(x)
+    x = BatchNormalization()(x)
+    x = Dropout(0.2)(x)
+    outputs = Dense(1, activation='sigmoid')(x)
+    lstm_model = Model(inputs, outputs)
+    
+    lstm_model.load_weights(weights_path)
+    
+    return lstm_model, mobilenet
 
 def extract_frames(video_path, frame_skip=5):
     cap = cv2.VideoCapture(video_path)
@@ -176,7 +191,7 @@ def plot_frame_grid(frames, probs, labels, threshold, n=10):
 with st.sidebar:
     st.markdown("### ⚙️ Settings")
     st.markdown("---")
-    model_exists = os.path.exists(LSTM_PATH)
+    model_exists = os.path.exists(WEIGHTS_PATH)
     status_color = "#2ed573" if model_exists else "#ff4757"
     st.markdown(f"<div style='font-size:0.7rem;color:{status_color}'>{'✅ Model found' if model_exists else '❌ Model not found'}</div>", unsafe_allow_html=True)
     threshold = st.slider("Anomaly Threshold", 0.1, 0.9, 0.5, 0.05)
@@ -189,11 +204,11 @@ st.markdown("<div class='hero-title'>🎥 Abnormal Event Detector</div>", unsafe
 st.markdown("<div class='hero-sub'>MobileNetV2 (features) → LSTM → Sigmoid</div>", unsafe_allow_html=True)
 st.markdown("<div class='info-box'>Upload any video (.mp4, .avi, .mov) to detect abnormal events. Frames with probability above threshold are classified as <b style='color:#ff4757'>ABNORMAL</b>.</div>", unsafe_allow_html=True)
 
-if not os.path.exists(LSTM_PATH):
-    st.error(f"❌ Model not found at {LSTM_PATH}")
+if not os.path.exists(WEIGHTS_PATH):
+    st.error(f"❌ Model weights not found at {WEIGHTS_PATH}")
     st.stop()
 
-lstm_model, mob_extractor = load_models(LSTM_PATH)
+lstm_model, mob_extractor = load_models(WEIGHTS_PATH)
 st.success("✅ Model loaded | MobileNetV2 extractor ready")
 
 uploaded = st.file_uploader("Upload Video", type=["mp4", "avi", "mov", "mkv"])
