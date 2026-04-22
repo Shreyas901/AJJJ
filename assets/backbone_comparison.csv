@@ -1,0 +1,4 @@
+Model,Backbone params (M),Frozen params (M),LSTM head params (K),Total pipeline params (M),Model size (MB),Feature dim,Inference ms/img,Architecture style,Preprocessing,Depth (layers),Input size,ImageNet top-1 acc,Best use case
+MobileNetV2,2.26,2.26,1779.6,4.04,9.14,1280,53.492,Depthwise sep conv,"Scale [-1,1]",53,224x224x3,71.8,Edge / fast inference
+VGG-16,14.71,14.71,993.2,15.71,56.21,512,233.323,Plain conv blocks,BGR mean subtract,23,224x224x3,71.3,Baseline / simple arch
+ResNet50,23.59,23.59,2566.0,26.15,90.58,2048,114.476,Residual skip conn,"Scale [-1,1]",175,224x224x3,74.9,Best accuracy
